@@ -676,7 +676,8 @@ class SessionStore:
 
         # Set the trusted CA certificates bundle for authenticating remote
         # servers.
-        session.verify = True if self._config.ca_bundle is None else self._config.ca_bundle
+        #session.verify = True if self._config.ca_bundle is None else self._config.ca_bundle
+        session.verify = False
 
         # Should we use a bearer token for client authentication?
         if (token := self._config.client_token) is not None:
