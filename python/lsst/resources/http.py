@@ -440,7 +440,6 @@ def _get_dav_and_server_headers(path: ResourcePath | str) -> tuple[str | None, s
                 _dav_to_http(str(path)),
                 stream=False,
                 timeout=config.timeout,
-                verify = False,
             )
 
             dav_header = server_header = None
@@ -672,15 +671,13 @@ class SessionStore:
         # If the remote endpoint doesn't use secure HTTP we don't include
         # bearer tokens in the requests nor need to authenticate the remote
         # server.
-        session.verify = False
-        print(f"... cert verify? {session.verify}")
-        if rpath.scheme != "https":
+        if rpath.scheme != "https" and rpath.scheme != "davs":
             log.debug("... remote endpoint doesn't use https.")
             return session
 
         # Set the trusted CA certificates bundle for authenticating remote
         # servers.
-        #session.verify = True if self._config.ca_bundle is None else self._config.ca_bundle
+        session.verify = True if self._config.ca_bundle is None else self._config.ca_bundle
 
         # Should we use a bearer token for client authentication?
         if (token := self._config.client_token) is not None:
