@@ -673,6 +673,7 @@ class SessionStore:
         # bearer tokens in the requests nor need to authenticate the remote
         # server.
         session.verify = False
+        print("... cert verify? {session.verify}")
         if rpath.scheme != "https":
             log.debug("... remote endpoint doesn't use https.")
             return session
