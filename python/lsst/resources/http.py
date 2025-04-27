@@ -440,6 +440,7 @@ def _get_dav_and_server_headers(path: ResourcePath | str) -> tuple[str | None, s
                 _dav_to_http(str(path)),
                 stream=False,
                 timeout=config.timeout,
+                verify = False,
             )
 
             dav_header = server_header = None
