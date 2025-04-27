@@ -672,13 +672,14 @@ class SessionStore:
         # If the remote endpoint doesn't use secure HTTP we don't include
         # bearer tokens in the requests nor need to authenticate the remote
         # server.
+        session.verify = False
         if rpath.scheme != "https":
+            log.debug("... remote endpoint doesn't use https.")
             return session
 
         # Set the trusted CA certificates bundle for authenticating remote
         # servers.
         #session.verify = True if self._config.ca_bundle is None else self._config.ca_bundle
-        session.verify = False
 
         # Should we use a bearer token for client authentication?
         if (token := self._config.client_token) is not None:
