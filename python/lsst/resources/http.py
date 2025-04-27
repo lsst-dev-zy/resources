@@ -673,6 +673,7 @@ class SessionStore:
         # server.
         if rpath.scheme != "https" and rpath.scheme != "davs":
             log.debug("... remote endpoint doesn't use https.")
+            print(f" ... rpath.scheme: {rpath.scheme}")
             return session
 
         # Set the trusted CA certificates bundle for authenticating remote
