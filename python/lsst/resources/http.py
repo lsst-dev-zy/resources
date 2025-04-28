@@ -671,9 +671,9 @@ class SessionStore:
         # If the remote endpoint doesn't use secure HTTP we don't include
         # bearer tokens in the requests nor need to authenticate the remote
         # server.
+        print(f" ... rpath.scheme: {rpath.scheme}")
         if rpath.scheme != "https" and rpath.scheme != "davs":
             log.debug("... remote endpoint doesn't use https.")
-            print(f" ... rpath.scheme: {rpath.scheme}")
             return session
 
         # Set the trusted CA certificates bundle for authenticating remote
