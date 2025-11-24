@@ -563,8 +563,8 @@ class DavClientPool:
                 return client
 
             config: DavConfig = self._config_pool.get_config_for_url(url)
-            self._clients[url] = self._make_client(url, config)
             print(f"Testing...........client config: {config}, cert:{config.get('user_cert')}")
+            self._clients[url] = self._make_client(url, config)
         return self._clients[url]
 
     def _make_client(self, url: str, config: DavConfig) -> DavClient:
@@ -649,6 +649,7 @@ class DavClient:
             user_cert = self._config.user_cert
             user_key = self._config.user_key
 
+        print(f"Tesing......... DavClient ca_certs:{cat_certs}, user_cert:{user_cert}, user_key:{user_key}")
         # We use this pool manager for sending requests that the front
         # server typically responds to directly without redirecting (e.g.
         # OPTIONS, HEAD, etc.)
