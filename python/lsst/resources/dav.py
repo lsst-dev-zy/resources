@@ -241,6 +241,7 @@ class DavResourcePath(ResourcePath):
         # Retrieve the client this resource must use to interact with the
         # server from the global client pool.
         self._dav_client = dav_globals.client_pool().get_client_for_url(self._internal_url)
+        print(f"Testing.......... client_pool:{dav_globals.client_pool}")
         return self._dav_client
 
     def _stat(self, refresh: bool = False) -> DavFileMetadata:
