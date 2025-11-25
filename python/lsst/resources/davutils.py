@@ -426,9 +426,11 @@ class DavConfigPool:
         # Select the configuration for the endpoint of the provided URL.
         normalized_url: str = normalize_url(url, preserve_path=False)
         if (config := self._configs.get(normalized_url)) is not None:
+            print(f"Testing...........normalized config:{config}")
             return config
 
         # No config was found for the specified URL. Use the default.
+        print(f"Testing...........default config:{self._default_config}")
         return self._default_config
 
     def _destroy(self) -> None:
@@ -633,6 +635,7 @@ class DavClient:
         if self._config.trusted_authorities is not None:
             if os.path.isdir(self._config.trusted_authorities):
                 ca_cert_dir = self._config.trusted_authorities
+                ca_certs = ca_certs_dir
             elif os.path.isfile(self._config.trusted_authorities):
                 ca_certs = self._config.trusted_authorities
             else:
@@ -651,7 +654,7 @@ class DavClient:
             user_cert = self._config.user_cert
             user_key = self._config.user_key
 
-        print(f"Testing......... DavClient ca_certs:{ca_certs}, user_cert:{user_cert}, user_key:{user_key}")
+        print(f"Testing......... DavClient ca_cert_dir:{ca_cert_dir}, ca_certs:{ca_certs}, user_cert:{user_cert}, user_key:{user_key}")
         # We use this pool manager for sending requests that the front
         # server typically responds to directly without redirecting (e.g.
         # OPTIONS, HEAD, etc.)
