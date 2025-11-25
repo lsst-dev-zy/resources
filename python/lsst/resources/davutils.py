@@ -1069,7 +1069,7 @@ class DavClient:
             "Content-Length": str(len(body)),
         }
         print(f"Testing....... DavClient PROPFIND url:{url}")
-        resp = self._request("PROPFIND", url=url, headers=headers, body=body)
+        resp = self._request("PROPFIND", url=url, headers=headers, body=body, pool_manager=self._backend)
         if resp.status in (HTTPStatus.MULTI_STATUS, HTTPStatus.NOT_FOUND):
             return resp
         else:
