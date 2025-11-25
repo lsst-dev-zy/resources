@@ -862,6 +862,7 @@ class DavClient:
             pool_manager = self._frontend
 
         log.debug("sending request %s %s", method, url)
+        print(f"Testing......pool_manager:{pool_manager}, cert:{pool_manager.cert_file}, key:{pool_manager.key_file}")
 
         with time_this(
             log,
@@ -1067,6 +1068,7 @@ class DavClient:
             "Content-Type": 'application/xml; charset="utf-8"',
             "Content-Length": str(len(body)),
         }
+        print(f"Testing....... DavClient PROPFIND url:{url}")
         resp = self._request("PROPFIND", url=url, headers=headers, body=body)
         if resp.status in (HTTPStatus.MULTI_STATUS, HTTPStatus.NOT_FOUND):
             return resp
