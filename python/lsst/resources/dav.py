@@ -199,6 +199,7 @@ class DavResourcePath(ResourcePath):
         # Build the internal URL we use to talk to the server, which
         # uses "http" or "https" as scheme instead of "dav" or "davs".
         self._internal_url: str = normalize_url(self.geturl())
+        print(f"Testing........DavResourcePath url:{self.geturl()}, _internal_url:{self._internal_url}")
 
         # WebDAV client this path must use to interact with the server.
         self._dav_client: DavClient | None = None
