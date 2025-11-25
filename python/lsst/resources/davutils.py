@@ -401,6 +401,7 @@ class DavConfigPool:
             with open(filename) as file:
                 for config_item in yaml.safe_load(file):
                     config = DavConfig(config_item)
+                    print(f"Testing...........DavConfigPool config:{config.base_url}")
                     if config.base_url not in self._configs:
                         self._configs[config.base_url] = config
                     else:
@@ -411,6 +412,7 @@ class DavConfigPool:
                             f"""configuration file {filename} contains two configurations for """
                             f"""endpoint {config.base_url}"""
                         )
+            print(f"Testing...........DavConfigPool _configs:{self._configs}")
 
     def get_config_for_url(self, url: str) -> DavConfig:
         """Return the configuration to use a webDAV client when interacting
