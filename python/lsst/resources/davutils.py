@@ -862,9 +862,7 @@ class DavClient:
             pool_manager = self._frontend
 
         log.debug("sending request %s %s", method, url)
-        cert_file=pool_manager.cert_file
-        key_file=pool_manager.key_file
-        print(f"Testing pool_manager:{pool_manager}, cert:{cert_file}, key:{key_file}")
+        print(f"Testing.......... pool_manager:{pool_manager}")
 
         with time_this(
             log,
