@@ -563,7 +563,7 @@ class DavClientPool:
                 return client
 
             config: DavConfig = self._config_pool.get_config_for_url(url)
-            print(f"Testing...........client config: {config}, cert:{config.get('user_cert')}")
+            print(f"Testing...........client config: {config}, cert:{config._user_cert}")
             self._clients[url] = self._make_client(url, config)
         return self._clients[url]
 
