@@ -635,7 +635,6 @@ class DavClient:
         if self._config.trusted_authorities is not None:
             if os.path.isdir(self._config.trusted_authorities):
                 ca_cert_dir = self._config.trusted_authorities
-                ca_certs = ca_certs_dir
             elif os.path.isfile(self._config.trusted_authorities):
                 ca_certs = self._config.trusted_authorities
             else:
