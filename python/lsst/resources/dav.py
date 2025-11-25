@@ -266,6 +266,7 @@ class DavResourcePath(ResourcePath):
         # relatively expensive and is fragile if this same resource is
         # modified by a different thread or by a different process.
         if refresh or self._cached_metadata is None:
+            print(f"Testing.........DavResourcePath url:{self._internal_url}")
             self._cached_metadata = self._client.stat(self._internal_url)
 
         return self._cached_metadata

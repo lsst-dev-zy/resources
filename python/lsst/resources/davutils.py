@@ -200,6 +200,7 @@ class DavConfig:
         else:
             self._base_url = normalize_url(base_url, preserve_path=False)
 
+        print(f"Testing........DavConfig base_url:{ self._base_url} from {base_url}")
         self._timeout_connect: float = float(config.get("timeout_connect", DavConfig.DEFAULT_TIMEOUT_CONNECT))
         self._timeout_read: float = float(config.get("timeout_read", DavConfig.DEFAULT_TIMEOUT_READ))
         self._persistent_connections_frontend: int = int(
@@ -1089,6 +1090,7 @@ class DavClient:
             that URL no exception is raised. Instead the returned details allow
             for detecting that the resource does not exist.
         """
+        print(f"Testing.........DavClient url:{url}")
         resp = self._propfind(url)
         match resp.status:
             case HTTPStatus.NOT_FOUND:
