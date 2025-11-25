@@ -653,7 +653,7 @@ class DavClient:
             user_cert = self._config.user_cert
             user_key = self._config.user_key
 
-        print(f"Testing......... DavClient ca_cert_dir:{ca_cert_dir}, ca_certs:{ca_certs}, user_cert:{user_cert}, user_key:{user_key}")
+        print(f"Testing DavClient cert_dir:{ca_cert_dir}, certs:{ca_certs}, cert:{user_cert}, key:{user_key}")
         # We use this pool manager for sending requests that the front
         # server typically responds to directly without redirecting (e.g.
         # OPTIONS, HEAD, etc.)
