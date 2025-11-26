@@ -65,7 +65,6 @@ if TYPE_CHECKING:
     from .utils import TransactionProtocol
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 def _timeout_from_environment(env_var: str, default_value: float) -> float:
     """Convert and return a timeout from the value of an environment variable
