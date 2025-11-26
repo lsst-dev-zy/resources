@@ -1085,7 +1085,6 @@ class DavClient:
             for detecting that the resource does not exist.
         """
         resp = self._propfind(url)
-        resp_data = resp.data.decode("utf-8", errors="replace")
         match resp.status:
             case HTTPStatus.NOT_FOUND:
                 href = url.replace(self._base_url, "", 1)
