@@ -1094,6 +1094,7 @@ class DavClient:
         """
         print(f"Testing.........DavClient url:{url}")
         resp = self._propfind(url)
+        print(f"Testing.........DavClient propfile resp: {resp}")
         match resp.status:
             case HTTPStatus.NOT_FOUND:
                 href = url.replace(self._base_url, "", 1)
