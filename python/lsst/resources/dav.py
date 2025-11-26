@@ -300,7 +300,9 @@ class DavResourcePath(ResourcePath):
         # needed. We need to test if parent URL is different from self URL,
         # otherwise we could be stuck in a recursive loop
         # where self == parent.
-        if self.geturl() != self.parent().geturl():
+        parent_dir = self.parent().geturl()
+        top_dir = os.getenv("LSST_RUN_TEMP_SPACE")
+        if self.geturl() != self.parent().geturl() and parent_dir != top_dir:
             print(f"Testing......parent:{self.parent()}")
             self.parent().mkdir()
 
