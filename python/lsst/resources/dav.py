@@ -199,7 +199,6 @@ class DavResourcePath(ResourcePath):
         # Build the internal URL we use to talk to the server, which
         # uses "http" or "https" as scheme instead of "dav" or "davs".
         self._internal_url: str = normalize_url(self.geturl())
-        print(f"Testing........DavResourcePath url:{self.geturl()}, _internal_url:{self._internal_url}")
 
         # WebDAV client this path must use to interact with the server.
         self._dav_client: DavClient | None = None
@@ -241,7 +240,6 @@ class DavResourcePath(ResourcePath):
 
         # Retrieve the client this resource must use to interact with the
         # server from the global client pool.
-        print(f"Testing.......... client_pool:{dav_globals.client_pool}")
         self._dav_client = dav_globals.client_pool().get_client_for_url(self._internal_url)
         return self._dav_client
 
@@ -267,7 +265,6 @@ class DavResourcePath(ResourcePath):
         # relatively expensive and is fragile if this same resource is
         # modified by a different thread or by a different process.
         if refresh or self._cached_metadata is None:
-            print(f"Testing.........DavResourcePath url:{self._internal_url}")
             self._cached_metadata = self._client.stat(self._internal_url)
 
         return self._cached_metadata
@@ -300,10 +297,7 @@ class DavResourcePath(ResourcePath):
         # needed. We need to test if parent URL is different from self URL,
         # otherwise we could be stuck in a recursive loop
         # where self == parent.
-        parent_dir = self.parent().geturl()
-        top_dir = os.getenv("LSST_RUN_TEMP_SPACE")
-        if self.geturl() != self.parent().geturl() and parent_dir != top_dir:
-            print(f"Testing......parent:{self.parent()}")
+        if self.geturl() != self.parent().geturl():
             self.parent().mkdir()
 
         self._client.mkcol(self._internal_url)
@@ -463,7 +457,7 @@ class DavResourcePath(ResourcePath):
             raise FileExistsError(f"File {self} exists and overwrite has been disabled")
 
         # Create parent directory and upload the data.
-        self.parent().mkdir()
+        #self.parent().mkdir()
         self._client.write(self._internal_url, data)
         self._invalidate_metatada_cache()
 

@@ -1723,7 +1723,7 @@ class HttpResourcePath(ResourcePath):
             "Content-Length": str(len(body)),
         }
         resp = self._send_webdav_request("PROPFIND", headers=headers, body=body)
-        print(f"Tesing.....................http PROPFIND:{resp}, status:{resp.status_code}")
+        print(f"Testing.....................http PROPFIND:{resp}, status:{resp.status_code}")
         if resp.status_code in (requests.codes.multi_status, requests.codes.not_found):
             return resp
         else:

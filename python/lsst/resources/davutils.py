@@ -200,7 +200,6 @@ class DavConfig:
         else:
             self._base_url = normalize_url(base_url, preserve_path=False)
 
-        print(f"Testing........DavConfig base_url:{ self._base_url} from {base_url}")
         self._timeout_connect: float = float(config.get("timeout_connect", DavConfig.DEFAULT_TIMEOUT_CONNECT))
         self._timeout_read: float = float(config.get("timeout_read", DavConfig.DEFAULT_TIMEOUT_READ))
         self._persistent_connections_frontend: int = int(
@@ -402,7 +401,6 @@ class DavConfigPool:
             with open(filename) as file:
                 for config_item in yaml.safe_load(file):
                     config = DavConfig(config_item)
-                    print(f"Testing...........DavConfigPool config:{config.base_url}")
                     if config.base_url not in self._configs:
                         self._configs[config.base_url] = config
                     else:
@@ -413,7 +411,6 @@ class DavConfigPool:
                             f"""configuration file {filename} contains two configurations for """
                             f"""endpoint {config.base_url}"""
                         )
-            print(f"Testing...........DavConfigPool _configs:{self._configs}")
 
     def get_config_for_url(self, url: str) -> DavConfig:
         """Return the configuration to use a webDAV client when interacting
@@ -427,11 +424,9 @@ class DavConfigPool:
         # Select the configuration for the endpoint of the provided URL.
         normalized_url: str = normalize_url(url, preserve_path=False)
         if (config := self._configs.get(normalized_url)) is not None:
-            print(f"Testing...........normalized config:{config}")
             return config
 
         # No config was found for the specified URL. Use the default.
-        print(f"Testing...........default config:{self._default_config}")
         return self._default_config
 
     def _destroy(self) -> None:
@@ -568,7 +563,6 @@ class DavClientPool:
                 return client
 
             config: DavConfig = self._config_pool.get_config_for_url(url)
-            print(f"Testing...........client config: {config}, cert:{config._user_cert}")
             self._clients[url] = self._make_client(url, config)
         return self._clients[url]
 
@@ -862,7 +856,6 @@ class DavClient:
             pool_manager = self._frontend
 
         log.debug("sending request %s %s", method, url)
-        print(f"Testing.......... pool_manager:{pool_manager}")
 
         with time_this(
             log,
@@ -1068,7 +1061,6 @@ class DavClient:
             "Content-Type": 'application/xml; charset="utf-8"',
             "Content-Length": str(len(body)),
         }
-        print(f"Testing....... DavClient PROPFIND url:{url}")
         resp = self._request("PROPFIND", url=url, headers=headers, body=body)
         if resp.status in (HTTPStatus.MULTI_STATUS, HTTPStatus.NOT_FOUND):
             return resp
@@ -1092,10 +1084,8 @@ class DavClient:
             that URL no exception is raised. Instead the returned details allow
             for detecting that the resource does not exist.
         """
-        print(f"Testing.........DavClient url:{url}")
         resp = self._propfind(url)
         resp_data = resp.data.decode("utf-8", errors="replace")
-        print(f"Testing.........DavClient propfile resp: {resp}, data:{resp_data}")
         match resp.status:
             case HTTPStatus.NOT_FOUND:
                 href = url.replace(self._base_url, "", 1)
