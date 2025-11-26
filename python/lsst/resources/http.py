@@ -1121,8 +1121,10 @@ class HttpResourcePath(ResourcePath):
 
         # Check if the target directory already exists.
         resp = self._propfind()
+        print(f"Testing...............http mkdir status:{resp.status_code}")
         if resp.status_code == requests.codes.multi_status:  # 207
             prop = _parse_propfind_response_body(resp.text)[0]
+            print(f"Testing...............http mkdir body:{prop}")
             if prop.exists:
                 if prop.is_directory:
                     return
