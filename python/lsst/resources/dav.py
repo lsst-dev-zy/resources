@@ -301,7 +301,7 @@ class DavResourcePath(ResourcePath):
         # otherwise we could be stuck in a recursive loop
         # where self == parent.
         if self.geturl() != self.parent().geturl():
-            print(f"Testing......parent:{parent()}")
+            print(f"Testing......parent:{self.parent()}")
             self.parent().mkdir()
 
         self._client.mkcol(self._internal_url)
