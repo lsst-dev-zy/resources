@@ -1151,12 +1151,20 @@ class _FakeWriteDavClient(DavClient):
     def _make_temporary_url(self, url: str, prefix: str = ".tmp") -> str:
         return url.replace("/final", "/.tmp.fake.final")
 
-    def put(self, url: str, headers: dict[str, str] | None = None, data: BinaryIO | bytes = b"") -> int | None:
+    def put(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        data: BinaryIO | bytes = b"",
+    ) -> int | None:
         size = len(data) if isinstance(data, bytes) else 0
         self._files[url] = size
         if self._put_error is not None:
             raise self._put_error
         return size
+
+    def mkcol(self, url: str) -> None:
+        pass
 
     def rename(
         self,

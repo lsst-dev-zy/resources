@@ -1371,7 +1371,9 @@ class DavClient:
         headers: dict[str, str] | None = None,
         pool_manager: PoolManager | None = None,
     ) -> HTTPResponse:
-        """Send a WebDAV MOVE request with MOVE-specific connection handling."""
+        """Send a WebDAV MOVE request with MOVE-specific connection
+        handling.
+        """
         self._sleep_before_move()
         headers = self._prepare_move_headers(headers)
         return self._request("MOVE", url=url, headers=headers, pool_manager=pool_manager)
@@ -2196,7 +2198,9 @@ class DavClient:
             self.delete(temporary_url)
 
     def _write_temporary_then_rename(self, url: str, data: BinaryIO | bytes) -> int | None:
-        """Upload to a temporary URL, then MOVE it into place with validation."""
+        """Upload to a temporary URL, then MOVE it into place with
+        validation.
+        """
         temporary_url = self._make_temporary_url(url)
         expected_size = self._get_upload_size(data)
         size: int | None = None
