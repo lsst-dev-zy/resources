@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import enum
 import io
 import json
@@ -196,6 +197,12 @@ class DavConfig:
     DEFAULT_RETRY_BACKOFF_MIN: float = 1.0
     DEFAULT_RETRY_BACKOFF_MAX: float = 3.0
 
+    # Minimal and maximal random delay (in seconds) to wait before sending a
+    # WebDAV MOVE request. This can be enabled for heavily loaded endpoints to
+    # avoid many clients issuing MOVE requests at the same time.
+    DEFAULT_MOVE_JITTER_MIN: float = 0.0
+    DEFAULT_MOVE_JITTER_MAX: float = 3.0
+
     # Path to a directory or certificate bundle file where the certificates
     # of the trusted certificate authorities can be found.
     # Those certificates will be used by the client of the webdav endpoint
@@ -269,6 +276,16 @@ class DavConfig:
         self._retry_backoff_max: float = float(
             config.get("retry_backoff_max", DavConfig.DEFAULT_RETRY_BACKOFF_MAX)
         )
+        self._move_jitter_min: float = float(
+            config.get("move_jitter_min", DavConfig.DEFAULT_MOVE_JITTER_MIN)
+        )
+        self._move_jitter_max: float = float(
+            config.get("move_jitter_max", DavConfig.DEFAULT_MOVE_JITTER_MAX)
+        )
+        if self._move_jitter_min < 0.0:
+            raise ValueError("move_jitter_min must be non-negative")
+        if self._move_jitter_max < self._move_jitter_min:
+            raise ValueError("move_jitter_max must be greater than or equal to move_jitter_min")
         self._trusted_authorities: str | None = expand_vars(
             config.get("trusted_authorities", DavConfig.DEFAULT_TRUSTED_AUTHORITIES)
         )
@@ -358,6 +375,14 @@ class DavConfig:
     @property
     def retry_backoff_max(self) -> float:
         return self._retry_backoff_max
+
+    @property
+    def move_jitter_min(self) -> float:
+        return self._move_jitter_min
+
+    @property
+    def move_jitter_max(self) -> float:
+        return self._move_jitter_max
 
     @property
     def trusted_authorities(self) -> str | None:
@@ -1323,6 +1348,34 @@ class DavClient:
         """
         return self._request("MKCOL", url=url, headers=headers, pool_manager=pool_manager)
 
+    def _prepare_move_headers(self, headers: dict[str, str] | None = None) -> dict[str, str]:
+        """Return headers to use for a WebDAV MOVE request."""
+        move_headers = {} if headers is None else dict(headers)
+        move_headers.setdefault("Connection", "close")
+        return move_headers
+
+    def _sleep_before_move(self) -> None:
+        """Sleep for the configured random interval before a MOVE request."""
+        jitter_min = self._config.move_jitter_min
+        jitter_max = self._config.move_jitter_max
+        if jitter_max <= 0.0:
+            return
+
+        delay = jitter_min if jitter_max == jitter_min else random.uniform(jitter_min, jitter_max)
+        if delay > 0.0:
+            time.sleep(delay)
+
+    def _request_move(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        pool_manager: PoolManager | None = None,
+    ) -> HTTPResponse:
+        """Send a WebDAV MOVE request with MOVE-specific connection handling."""
+        self._sleep_before_move()
+        headers = self._prepare_move_headers(headers)
+        return self._request("MOVE", url=url, headers=headers, pool_manager=pool_manager)
+
     def _move(
         self,
         url: str,
@@ -1344,7 +1397,7 @@ class DavClient:
         -----
         This method is intended for subclasses to override when needed.
         """
-        return self._request("MOVE", url=url, headers=headers, pool_manager=pool_manager)
+        return self._request_move(url=url, headers=headers, pool_manager=pool_manager)
 
     def _propfind(
         self,
@@ -2107,6 +2160,74 @@ class DavClient:
             resp.drain_conn()
             resp.release_conn()
 
+    def _get_upload_size(self, data: BinaryIO | bytes, uploaded_size: int | None = None) -> int | None:
+        """Return the expected upload size when it can be determined."""
+        if uploaded_size is not None:
+            return uploaded_size
+
+        if isinstance(data, bytes):
+            return len(data)
+
+        try:
+            position = data.tell()
+            data.seek(0, os.SEEK_END)
+            size = data.tell() - position
+            data.seek(position)
+            return size
+        except (AttributeError, OSError, ValueError):
+            pass
+
+        try:
+            return os.fstat(data.fileno()).st_size
+        except (AttributeError, OSError, ValueError):
+            return None
+
+    def _remote_file_matches_size(self, url: str, expected_size: int | None) -> bool:
+        """Return True if the remote file exists and has the expected size."""
+        if expected_size is None:
+            return False
+
+        stat = self.stat(url)
+        return stat.exists and stat.is_file and stat.size == expected_size
+
+    def _cleanup_temporary_url(self, temporary_url: str) -> None:
+        """Best-effort cleanup of a temporary upload URL."""
+        with contextlib.suppress(Exception):
+            self.delete(temporary_url)
+
+    def _write_temporary_then_rename(self, url: str, data: BinaryIO | bytes) -> int | None:
+        """Upload to a temporary URL, then MOVE it into place with validation."""
+        temporary_url = self._make_temporary_url(url)
+        expected_size = self._get_upload_size(data)
+        size: int | None = None
+
+        try:
+            try:
+                size = self.put(temporary_url, data=data)
+            except Exception:
+                if not self._remote_file_matches_size(temporary_url, expected_size):
+                    self._cleanup_temporary_url(temporary_url)
+                    raise
+                size = expected_size
+
+            expected_size = self._get_upload_size(data, size) if expected_size is None else expected_size
+            try:
+                self.rename(temporary_url, url, overwrite=True, create_parent=False)
+            except Exception:
+                if self._remote_file_matches_size(url, expected_size):
+                    self._cleanup_temporary_url(temporary_url)
+                elif self._remote_file_matches_size(temporary_url, expected_size):
+                    self.rename(temporary_url, url, overwrite=True, create_parent=False)
+                else:
+                    self._cleanup_temporary_url(temporary_url)
+                    raise
+
+            self._file_size_cache.update_size(url, size)
+            return size
+        except Exception:
+            self._cleanup_temporary_url(temporary_url)
+            raise
+
     def download(self, url: str, filename: str, chunk_size: int) -> int:
         """Download the content of a file and write it to local file.
 
@@ -2159,19 +2280,7 @@ class DavClient:
         # upload.
         self.mkcol(self._parent(url))
 
-        try:
-            # Upload to a temporary file and rename to the final name.
-            temporary_url = self._make_temporary_url(url)
-            size = self.put(temporary_url, data=data)
-            self.rename(temporary_url, url, overwrite=True, create_parent=False)
-
-            # Update the file size cache with this size
-            self._file_size_cache.update_size(url, size)
-            return size
-        except Exception:
-            # Upload failed. Attempt to remove the temporary file.
-            self.delete(temporary_url)
-            raise
+        return self._write_temporary_then_rename(url=url, data=data)
 
     def checksums(self, url: str) -> dict[str, str]:
         """Return the checksums of the contents of file located at `url`.
@@ -2719,7 +2828,7 @@ class DavClientDCache(DavClientURLSigner):
         pool_manager: PoolManager | None = None,
     ) -> HTTPResponse:
         """Inherits doc string."""
-        return self._request("MOVE", url=url, headers=headers, pool_manager=self._move_pool_manager)
+        return self._request_move(url=url, headers=headers, pool_manager=self._move_pool_manager)
 
     @override
     def _propfind(
@@ -2924,19 +3033,7 @@ class DavClientDCache(DavClientURLSigner):
         # to RFC 4918, this is advantageous because it avoids several
         # round-trips to the server for creating all the directories
         # before actually uploading the data.
-        try:
-            # Upload to a temporary file and rename to the final name.
-            temporary_url = self._make_temporary_url(url)
-            size = self.put(temporary_url, data=data)
-            self.rename(temporary_url, url, overwrite=True, create_parent=False)
-
-            # Update the file size cache with this size
-            self._file_size_cache.update_size(url, size)
-            return size
-        except Exception:
-            # Upload failed. Attempt to remove the temporary file.
-            self.delete(temporary_url)
-            raise
+        return self._write_temporary_then_rename(url=url, data=data)
 
     @override
     def mkcol(self, url: str) -> None:
@@ -3225,19 +3322,7 @@ class DavClientXrootD(DavClientURLSigner):
         # to RFC 4918, this is advantageous because it avoids several
         # round-trips to the server for creating all the directories
         # before actually uploading the data.
-        try:
-            # Upload to a temporary file and rename to the final name.
-            temporary_url = self._make_temporary_url(url)
-            size = self.put(temporary_url, data=data)
-            self.rename(temporary_url, url, overwrite=True, create_parent=False)
-
-            # Update the file size cache with this size
-            self._file_size_cache.update_size(url, size)
-            return size
-        except Exception:
-            # Upload failed. Attempt to remove the temporary file.
-            self.delete(temporary_url)
-            raise
+        return self._write_temporary_then_rename(url=url, data=data)
 
     @override
     def mkcol(self, url: str) -> None:

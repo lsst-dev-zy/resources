@@ -25,7 +25,7 @@ import unittest
 import zlib
 from collections.abc import Callable
 from threading import Thread
-from typing import cast
+from typing import BinaryIO, cast
 from zipfile import ZipFile, ZipInfo
 
 try:
@@ -49,8 +49,10 @@ from lsst.resources.dav import (
     dav_globals,
 )
 from lsst.resources.davutils import (
+    DavClient,
     DavConfig,
     DavConfigPool,
+    DavFileMetadata,
     TokenAuthorizer,
 )
 from lsst.resources.tests import GenericReadWriteTestCase, GenericTestCase
@@ -946,6 +948,8 @@ class DavConfigPoolTestCase(unittest.TestCase):
             self.assertEqual(config.retries, DavConfig.DEFAULT_RETRIES)
             self.assertEqual(config.timeout_connect, DavConfig.DEFAULT_TIMEOUT_CONNECT)
             self.assertEqual(config.timeout_read, DavConfig.DEFAULT_TIMEOUT_READ)
+            self.assertEqual(config.move_jitter_min, DavConfig.DEFAULT_MOVE_JITTER_MIN)
+            self.assertEqual(config.move_jitter_max, DavConfig.DEFAULT_MOVE_JITTER_MAX)
             self.assertEqual(config.token, DavConfig.DEFAULT_TOKEN)
             self.assertEqual(
                 config.persistent_connections_per_host, DavConfig.DEFAULT_PERSISTENT_CONNECTIONS_PER_HOST
@@ -968,6 +972,8 @@ class DavConfigPoolTestCase(unittest.TestCase):
   retries: 3
   retry_backoff_min: 1.0
   retry_backoff_max: 3.0
+  move_jitter_min: 0.5
+  move_jitter_max: 2.5
   user_cert: "${X509_USER_PROXY}"
   user_key: "${X509_USER_PROXY}"
   trusted_authorities: "/etc/grid-security/certificates"
@@ -1001,6 +1007,8 @@ class DavConfigPoolTestCase(unittest.TestCase):
             self.assertEqual(config.token, DavConfig.DEFAULT_TOKEN)
             self.assertEqual(config.user_cert, "${X509_USER_PROXY}")
             self.assertEqual(config.trusted_authorities, "/etc/grid-security/certificates")
+            self.assertEqual(config.move_jitter_min, 0.5)
+            self.assertEqual(config.move_jitter_max, 2.5)
             self.assertFalse(config.enable_fsspec)
             self.assertFalse(config.collect_memory_usage)
             self.assertEqual(config.request_checksum, "md5")
@@ -1053,10 +1061,136 @@ class DavConfigPoolTestCase(unittest.TestCase):
             with self.assertRaises(ValueError):
                 DavConfigPool("MY_VAR")
 
+    def test_dav_move_jitter_configuration_validation(self):
+        """Ensure invalid MOVE jitter configuration is rejected."""
+        with self.assertRaises(ValueError):
+            DavConfig({"move_jitter_min": -1.0})
+
+        with self.assertRaises(ValueError):
+            DavConfig({"move_jitter_min": 2.0, "move_jitter_max": 1.0})
+
+    def test_dav_move_connection_close(self):
+        """Ensure MOVE requests ask the server to close the connection."""
+        client = DavClient(url="davs://host1.example.org:1234/", config=DavConfig())
+        response = unittest.mock.Mock()
+
+        with (
+            unittest.mock.patch.object(client, "_sleep_before_move") as sleep_before_move,
+            unittest.mock.patch.object(client, "_request", return_value=response) as request,
+        ):
+            self.assertIs(client._move("davs://host1.example.org:1234/file"), response)
+
+        sleep_before_move.assert_called_once_with()
+        request.assert_called_once()
+        args, kwargs = request.call_args
+        self.assertEqual(args[0], "MOVE")
+        self.assertEqual(kwargs["headers"], {"Connection": "close"})
+        self.assertIsNone(kwargs["pool_manager"])
+
+    def test_dav_move_preserves_explicit_connection_header(self):
+        """Ensure explicit MOVE connection headers are not overwritten."""
+        client = DavClient(url="davs://host1.example.org:1234/", config=DavConfig())
+        response = unittest.mock.Mock()
+
+        with (
+            unittest.mock.patch.object(client, "_sleep_before_move"),
+            unittest.mock.patch.object(client, "_request", return_value=response) as request,
+        ):
+            client._move("davs://host1.example.org:1234/file", headers={"Connection": "keep-alive"})
+
+        _, kwargs = request.call_args
+        self.assertEqual(kwargs["headers"], {"Connection": "keep-alive"})
+
+    def test_dav_write_accepts_successful_put_after_exception(self):
+        """Ensure write validates temp file after an ambiguous PUT error."""
+        client = _FakeWriteDavClient(put_error=RuntimeError("lost PUT response"))
+        self.assertEqual(client.write("davs://host1.example.org:1234/final", b"abc"), 3)
+        self.assertEqual(
+            client.renamed,
+            [("davs://host1.example.org:1234/.tmp.fake.final", "davs://host1.example.org:1234/final")],
+        )
+
+    def test_dav_write_accepts_successful_move_after_exception(self):
+        """Ensure write validates final file after an ambiguous MOVE error."""
+        client = _FakeWriteDavClient(rename_error=RuntimeError("lost MOVE response"))
+        self.assertEqual(client.write("davs://host1.example.org:1234/final", b"abc"), 3)
+        self.assertEqual(client.deleted, ["davs://host1.example.org:1234/.tmp.fake.final"])
+
+    def test_dav_write_retries_move_when_temp_remains(self):
+        """Ensure write retries MOVE when temp remains and final is missing."""
+        client = _FakeWriteDavClient(
+            rename_error=RuntimeError("lost MOVE response"), move_error_leaves_temp=True
+        )
+        self.assertEqual(client.write("davs://host1.example.org:1234/final", b"abc"), 3)
+        self.assertEqual(len(client.renamed), 2)
+
     def _create_config(self, config: str) -> str:
         with tempfile.NamedTemporaryFile(mode="wt", dir=self.tmpdir, delete=False) as f:
             f.write(config)
             return f.name
+
+
+class _FakeWriteDavClient(DavClient):
+    """Fake WebDAV client for testing temp-write validation."""
+
+    def __init__(
+        self,
+        *,
+        put_error: Exception | None = None,
+        rename_error: Exception | None = None,
+        move_error_leaves_temp: bool = False,
+    ) -> None:
+        super().__init__(url="davs://host1.example.org:1234/", config=DavConfig())
+        self._put_error = put_error
+        self._rename_error = rename_error
+        self._move_error_leaves_temp = move_error_leaves_temp
+        self._files: dict[str, int] = {}
+        self.renamed: list[tuple[str, str]] = []
+        self.deleted: list[str] = []
+
+    def _make_temporary_url(self, url: str, prefix: str = ".tmp") -> str:
+        return url.replace("/final", "/.tmp.fake.final")
+
+    def put(self, url: str, headers: dict[str, str] | None = None, data: BinaryIO | bytes = b"") -> int | None:
+        size = len(data) if isinstance(data, bytes) else 0
+        self._files[url] = size
+        if self._put_error is not None:
+            raise self._put_error
+        return size
+
+    def rename(
+        self,
+        source_url: str,
+        destination_url: str,
+        overwrite: bool = False,
+        create_parent: bool = True,
+    ) -> None:
+        self.renamed.append((source_url, destination_url))
+        if self._rename_error is not None:
+            error = self._rename_error
+            self._rename_error = None
+            if self._move_error_leaves_temp:
+                raise error
+
+            self._files[destination_url] = self._files.pop(source_url)
+            raise error
+
+        self._files[destination_url] = self._files.pop(source_url)
+
+    def stat(self, url: str) -> DavFileMetadata:
+        if url not in self._files:
+            return DavFileMetadata(base_url=self._base_url, href=url.removeprefix(self._base_url))
+        return DavFileMetadata(
+            base_url=self._base_url,
+            href=url.removeprefix(self._base_url),
+            exists=True,
+            size=self._files[url],
+            is_dir=False,
+        )
+
+    def delete(self, url: str) -> None:
+        self.deleted.append(url)
+        self._files.pop(url, None)
 
 
 class DavTokenAuthorizerTestCase(unittest.TestCase):
